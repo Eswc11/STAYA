@@ -29,6 +29,23 @@ class UserRegistrationView(viewsets.ModelViewSet):
             'email': user.email
         }, status=status.HTTP_201_CREATED)
 
+class UserProfileView(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        user = request.user
+        tasks = Task.objects.filter(user=user)
+        completed_tasks = tasks.filter(completed=True)
+        
+        return Response({
+            'username': user.username,
+            'email': user.email,
+            'created_at': user.date_joined,
+            'task_count': tasks.count(),
+            'completed_tasks': completed_tasks.count(),
+            'completion_rate': (completed_tasks.count() / tasks.count() * 100) if tasks.count() > 0 else 0
+        })
+
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [permissions.IsAuthenticated]

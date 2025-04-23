@@ -48,12 +48,16 @@ import {
   Refresh as RefreshIcon,
   Person as PersonIcon,
   Logout as LogoutIcon,
+  AccessTime as AccessTimeIcon,
 } from '@mui/icons-material';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Auth/Login';
 import Register from './components/Auth/Register';
 import PersonalCabinet from './components/Profile/PersonalCabinet';
 import { tasks } from './services/api';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 
 const theme = createTheme({
   palette: {
@@ -106,15 +110,6 @@ const theme = createTheme({
   },
 });
 
-const categories = [
-  'Reading',
-  'Writing',
-  'Math',
-  'Science',
-  'History',
-  'Other'
-];
-
 const POMODORO_TIMES = {
   work: 25 * 60,
   shortBreak: 5 * 60,
@@ -133,8 +128,14 @@ function MainApp() {
   const [pomodoroCount, setPomodoroCount] = useState(0);
   const [activeTab, setActiveTab] = useState(0);
   const [anchorEl, setAnchorEl] = useState(null);
+  const [dueDate, setDueDate] = useState(null);
+  const [currentMode, setCurrentMode] = useState('work');
+  const [showWarning, setShowWarning] = useState(false);
+  const [warningSound] = useState(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'));
 
-  // Add timer effect
+  const workCategories = ['Work', 'Meeting', 'Project', 'Other'];
+  const studyCategories = ['Reading', 'Writing', 'Math', 'Science', 'History', 'Other'];
+
   useEffect(() => {
     let interval;
     if (isTimerRunning && timer > 0) {
@@ -152,56 +153,73 @@ function MainApp() {
   }, [isTimerRunning, timer]);
 
   useEffect(() => {
-    fetchTasks();
+    if (user) {
+      fetchTasks();
+    } else {
+      setTaskList([]);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowLeft') {
+        setCurrentMode('work');
+        setSelectedCategory(workCategories[0]);
+      } else if (e.key === 'ArrowRight') {
+        setCurrentMode('study');
+        setSelectedCategory(studyCategories[0]);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (isTimerRunning && timer === 300) { // 5 minutes
+      setShowWarning(true);
+      warningSound.play();
+      setTimeout(() => {
+        setShowWarning(false);
+      }, 10000); // Hide after 10 seconds
+    }
+    if (isTimerRunning && timer === 60) { // 1 minute
+      setShowWarning(true);
+      warningSound.play();
+      setTimeout(() => {
+        setShowWarning(false);
+      }, 10000); // Hide after 10 seconds
+    }
+  }, [timer, isTimerRunning]);
 
   const fetchTasks = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('No authentication token found');
-        return;
-      }
-      
       const response = await tasks.getAll();
-      if (response.data) {
-        setTaskList(response.data);
-      }
+      setTaskList(response.data);
     } catch (error) {
-      console.error('Failed to fetch tasks:', error.response?.data || error.message);
-      if (error.response?.status === 401) {
-        // Handle unauthorized access
-        window.location.href = '/';
-      }
+      console.error('Error fetching tasks:', error);
     }
   };
 
   const handleAddTask = async () => {
-    if (newTask.trim()) {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          console.error('No authentication token found');
-          return;
-        }
-        
-        const response = await tasks.create({
-          title: newTask,
-          category: selectedCategory || 'Other',
-        });
-        
-        if (response.data) {
-          setTaskList([...taskList, response.data]);
-          setNewTask('');
-          setSelectedCategory('');
-        }
-      } catch (error) {
-        console.error('Failed to create task:', error.response?.data || error.message);
-        if (error.response?.status === 401) {
-          // Handle unauthorized access
-          window.location.href = '/';
-        }
-      }
+    if (!newTask.trim()) return;
+    
+    try {
+      const taskData = {
+        title: newTask,
+        description: '',
+        due_date: dueDate,
+        category: selectedCategory,
+        priority: 'medium',
+      };
+      
+      await tasks.create(taskData);
+      setNewTask('');
+      setDueDate(null);
+      setSelectedCategory('');
+      fetchTasks();
+    } catch (error) {
+      console.error('Error creating task:', error);
     }
   };
 
@@ -220,7 +238,8 @@ function MainApp() {
       await tasks.update(taskId, { 
         title: task.title,
         category: task.category,
-        completed: !task.completed 
+        completed: !task.completed,
+        due_date: task.due_date
       });
       setTaskList(taskList.map(t => 
         t.id === taskId ? { ...t, completed: !t.completed } : t
@@ -245,7 +264,6 @@ function MainApp() {
       setPomodoroMode('work');
       setTimer(POMODORO_TIMES.work);
     }
-    // Play notification sound
     new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play();
   };
 
@@ -289,6 +307,11 @@ function MainApp() {
     handleMenuClose();
   };
 
+  const isTaskOverdue = (task) => {
+    if (!task.due_date) return false;
+    return new Date(task.due_date) < new Date();
+  };
+
   if (!user) {
     return (
       <Box sx={{ py: 4 }}>
@@ -306,7 +329,7 @@ function MainApp() {
       <AppBar position="static" elevation={0}>
         <Toolbar>
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Study Task Manager
+            {currentMode === 'work' ? 'Work Task Manager' : 'Study Task Manager'}
           </Typography>
           <IconButton
             onClick={handleMenuOpen}
@@ -343,7 +366,7 @@ function MainApp() {
                   borderRadius: 4,
                   backgroundColor: 'rgba(0, 0, 0, 0.1)',
                   '& .MuiLinearProgress-bar': {
-                    backgroundColor: '#FF6B6B',
+                    backgroundColor: currentMode === 'work' ? '#FF6B6B' : '#4ECDC4',
                   }
                 }}
               />
@@ -358,7 +381,7 @@ function MainApp() {
                   <TextField
                     fullWidth
                     variant="outlined"
-                    placeholder="Add a new study task"
+                    placeholder={`Add a new ${currentMode} task`}
                     value={newTask}
                     onChange={(e) => setNewTask(e.target.value)}
                     onKeyPress={handleKeyPress}
@@ -378,13 +401,29 @@ function MainApp() {
                       onChange={(e) => setSelectedCategory(e.target.value)}
                       sx={{ borderRadius: 2 }}
                     >
-                      {categories.map((category) => (
+                      {(currentMode === 'work' ? workCategories : studyCategories).map((category) => (
                         <MenuItem key={category} value={category}>
                           {category}
                         </MenuItem>
                       ))}
                     </Select>
                   </FormControl>
+                </Grid>
+                <Grid item xs={12}>
+                  <LocalizationProvider dateAdapter={AdapterDateFns}>
+                    <DateTimePicker
+                      label="Due Date"
+                      value={dueDate}
+                      onChange={(newValue) => setDueDate(newValue)}
+                      slotProps={{
+                        textField: {
+                          fullWidth: true,
+                          variant: "outlined",
+                          sx: { borderRadius: 2 }
+                        }
+                      }}
+                    />
+                  </LocalizationProvider>
                 </Grid>
                 <Grid item xs={12}>
                   <Box sx={{ display: 'flex', gap: 1 }}>
@@ -412,12 +451,14 @@ function MainApp() {
 
             <Paper elevation={3} sx={{ p: 3 }}>
               <List>
-                {taskList.map((task) => (
+                {taskList
+                  .filter(task => task.category === selectedCategory)
+                  .map((task) => (
                   <ListItem 
                     key={task.id} 
                     divider
                     sx={{
-                      bgcolor: task.completed ? 'rgba(255, 107, 107, 0.05)' : 'transparent',
+                      bgcolor: task.completed ? 'rgba(255, 107, 107, 0.05)' : isTaskOverdue(task) ? 'rgba(255, 0, 0, 0.05)' : 'transparent',
                       borderRadius: 2,
                       mb: 1,
                       transition: 'all 0.2s ease-in-out',
@@ -435,7 +476,24 @@ function MainApp() {
                     />
                     <ListItemText 
                       primary={task.title}
-                      secondary={task.category}
+                      secondary={
+                        <Box>
+                          <Typography variant="body2" color="text.secondary" component="div">
+                            {task.category}
+                          </Typography>
+                          {task.due_date && (
+                            <Typography 
+                              variant="body2" 
+                              color={isTaskOverdue(task) ? 'error' : 'text.secondary'}
+                              component="div"
+                              sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                            >
+                              <AccessTimeIcon fontSize="small" />
+                              Due: {new Date(task.due_date).toLocaleString()}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
                       sx={{
                         textDecoration: task.completed ? 'line-through' : 'none',
                         color: task.completed ? 'text.secondary' : 'text.primary',
@@ -459,10 +517,10 @@ function MainApp() {
                     </ListItemSecondaryAction>
                   </ListItem>
                 ))}
-                {taskList.length === 0 && (
+                {taskList.filter(task => task.category === selectedCategory).length === 0 && (
                   <ListItem>
                     <ListItemText 
-                      primary="No tasks yet. Add your first study task above!"
+                      primary={`No ${currentMode} tasks yet. Add your first task above!`}
                       sx={{ textAlign: 'center', color: 'text.secondary' }}
                     />
                   </ListItem>
@@ -552,6 +610,49 @@ function MainApp() {
             startIcon={<SkipIcon />}
           >
             Skip
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Warning Dialog */}
+      <Dialog
+        open={showWarning}
+        onClose={() => setShowWarning(false)}
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            overflow: 'hidden',
+            bgcolor: 'warning.light',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          bgcolor: 'warning.main',
+          color: 'white',
+          textAlign: 'center',
+          fontWeight: 'bold'
+        }}>
+          Time Warning!
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4 }}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'warning.dark' }}>
+              {timer === 300 ? '5 minutes left!' : '1 minute left!'}
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 2, textAlign: 'center' }}>
+              {timer === 300 
+                ? 'You have 5 minutes remaining in your current session.'
+                : 'Only 1 minute left! Time to wrap up your current task.'}
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, justifyContent: 'center' }}>
+          <Button
+            variant="contained"
+            onClick={() => setShowWarning(false)}
+            sx={{ bgcolor: 'warning.main', '&:hover': { bgcolor: 'warning.dark' } }}
+          >
+            Dismiss
           </Button>
         </DialogActions>
       </Dialog>

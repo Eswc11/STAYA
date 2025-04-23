@@ -19,7 +19,6 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error('Request error:', error);
     return Promise.reject(error);
   }
 );
@@ -28,19 +27,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    console.error('Response error:', error.response?.data || error.message);
-    
     if (error.response?.status === 401) {
       // Handle unauthorized access
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/';
     }
-    
-    if (error.response?.status === 422) {
-      console.error('Validation error:', error.response.data);
-    }
-    
     return Promise.reject(error);
   }
 );
@@ -74,14 +66,14 @@ export const auth = {
 
 export const tasks = {
   getAll: () => api.get('/api/tasks/'),
-  create: (task) => api.post('/api/tasks/', task),
-  update: (id, task) => api.put(`/api/tasks/${id}/`, task),
+  create: (taskData) => api.post('/api/tasks/', taskData),
+  update: (id, taskData) => api.put(`/api/tasks/${id}/`, taskData),
   delete: (id) => api.delete(`/api/tasks/${id}/`),
   toggleComplete: (id) => api.post(`/api/tasks/${id}/toggle_complete/`),
 };
 
-export const user = {
-  getProfile: () => api.get('/api/user/profile'),
+export const profile = {
+  get: () => api.get('/api/user/profile/'),
 };
 
 export default api; 

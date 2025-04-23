@@ -18,7 +18,9 @@ class UserSerializer(serializers.ModelSerializer):
         return user
 
 class TaskSerializer(serializers.ModelSerializer):
+    user = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = Task
-        fields = ['id', 'title', 'description', 'created_at', 'due_date', 'completed', 'category', 'priority']
-        read_only_fields = ['created_at'] 
+        fields = ['id', 'title', 'description', 'created_at', 'due_date', 'completed', 'category', 'priority', 'user']
+        read_only_fields = ['created_at', 'user'] 

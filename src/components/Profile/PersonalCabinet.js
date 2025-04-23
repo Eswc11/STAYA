@@ -9,20 +9,18 @@ import {
   CircularProgress,
   Alert,
 } from '@mui/material';
-import { user } from '../../services/api';
-import { useAuth } from '../../contexts/AuthContext';
+import { profile } from '../../services/api';
 
 const PersonalCabinet = () => {
-  const { user: authUser } = useAuth();
-  const [profile, setProfile] = useState(null);
+  const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const response = await user.getProfile();
-        setProfile(response.data);
+        const response = await profile.get();
+        setProfileData(response.data);
       } catch (err) {
         setError('Failed to load profile data');
       } finally {
@@ -62,13 +60,13 @@ const PersonalCabinet = () => {
                 fontSize: '3rem',
               }}
             >
-              {authUser?.username?.[0]?.toUpperCase() || '?'}
+              {profileData?.username?.[0]?.toUpperCase() || '?'}
             </Avatar>
             <Typography variant="h5" sx={{ mt: 2, fontWeight: 'bold' }}>
-              {authUser?.username || 'User'}
+              {profileData?.username || 'User'}
             </Typography>
             <Typography color="text.secondary">
-              {authUser?.email || 'No email provided'}
+              {profileData?.email || 'No email provided'}
             </Typography>
           </Box>
         </Grid>
@@ -83,7 +81,7 @@ const PersonalCabinet = () => {
                 Member Since
               </Typography>
               <Typography>
-                {new Date(profile.created_at).toLocaleDateString()}
+                {new Date(profileData?.created_at).toLocaleDateString()}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -91,7 +89,7 @@ const PersonalCabinet = () => {
                 Total Tasks
               </Typography>
               <Typography>
-                {profile.task_count}
+                {profileData?.task_count}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -99,7 +97,7 @@ const PersonalCabinet = () => {
                 Completed Tasks
               </Typography>
               <Typography>
-                {profile.completed_tasks}
+                {profileData?.completed_tasks}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -107,9 +105,7 @@ const PersonalCabinet = () => {
                 Completion Rate
               </Typography>
               <Typography>
-                {profile.task_count > 0
-                  ? `${Math.round((profile.completed_tasks / profile.task_count) * 100)}%`
-                  : '0%'}
+                {profileData?.completion_rate?.toFixed(1)}%
               </Typography>
             </Grid>
           </Grid>
